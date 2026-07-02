@@ -1,0 +1,78 @@
+name: Deploy Static HTML5 Site to GitHub Pages
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v6
+
+      - name: Prepare static website files
+        shell: bash
+        run: |
+          set -e
+
+          rm -rf _site
+          mkdir -p _site
+
+          cp index.html _site/index.html
+          cp -R assets _site/assets
+
+          touch _site/.nojekyll
+
+          test -f _site/index.html
+          test -d _site/assets
+          test -f _site/assets/css/style.css
+          test -f _site/assets/js/app.js
+          test -f _site/assets/js/questions.js
+
+          if grep -R "/input_file" _site; then
+            echo "ERROR: Temporary AI Studio file path found."
+            exit 1
+          fi
+
+          if grep -R "file://" _site; then
+            echo "ERROR: Invalid local file path found."
+            exit 1
+          fi
+
+      - name: Upload static site artifact
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    permissions:
+      pages: write
+      id-token: write
+
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5
